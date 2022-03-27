@@ -66,8 +66,10 @@ def upgrade(packages: Union[List[str], str] = []):
         install(packages)
     else:
         s = pacman("-Su")
-    if s["code"] != 0:
-        raise Exception("Failed to upgrade packages: {0}".format(s["stderr"]))
+        if s["code"] != 0:
+            raise Exception(
+                "Failed to upgrade packages: {0}".format(s["stderr"])
+            )
 
 
 def remove(packages: Union[List[str], str], purge=False):
