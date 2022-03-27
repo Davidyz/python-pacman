@@ -4,33 +4,40 @@
 """
 
 import subprocess, os, shutil
+from typing import Dict, List, Optional, Union
 from urllib import request
 from shlex import quote
 
 
-__PACMAN_BIN = shutil.which("pacman")   # default to use the system's pacman binary
+__PACMAN_BIN = shutil.which(
+    "pacman"
+)  # default to use the system's pacman binary
 
 
-def get_bin():
-    '''
+def get_bin() -> str:
+    """
     Return the current pacman binary being used.
-    '''
+    """
+    if __PACMAN_BIN is None:
+        raise IOError(f"The binary {__PACMAN_BIN} cannot be found.")
     return __PACMAN_BIN
 
 
-def set_bin(path):
-    '''
-    Set a custom pacman binary. 
+def set_bin(path: str):
+    """
+    Set a custom pacman binary.
     If the pacman binary is set to an AUR helper, this module may also be used to interact with AUR.
-    '''
+    """
     global __PACMAN_BIN
-    if isinstance(path, str) and (os.path.isfile(path) or os.path.isfile(shutil.which(path))):
+    if isinstance(path, str) and (
+        os.path.isfile(path) or os.path.isfile(shutil.which(path) or "")
+    ):
         __PACMAN_BIN = shutil.which(path)
     else:
         raise IOError("This executable does not exist.")
 
 
-def install(packages, needed=True):
+def install(packages: Union[List[str], str], needed: bool = True):
     """
     Install package\n
     Parameters::\n
@@ -49,7 +56,7 @@ def refresh():
         raise Exception("Failed to refresh database: {0}".format(s["stderr"]))
 
 
-def upgrade(packages=[]):
+def upgrade(packages: Union[List[str], str] = []):
     """
     Upgrade packages
     Parameters::\n
@@ -63,7 +70,7 @@ def upgrade(packages=[]):
         raise Exception("Failed to upgrade packages: {0}".format(s["stderr"]))
 
 
-def remove(packages, purge=False):
+def remove(packages: Union[List[str], str], purge=False):
     """
     Remove package(s) and purge its files
     Parameters ::\n
@@ -75,7 +82,7 @@ def remove(packages, purge=False):
         raise Exception("Failed to remove: {0}".format(s["stderr"]))
 
 
-def get_all():
+def get_all() -> List[Dict[str, str]]:
     """List all packages"""
     interim, results = {}, []
     s = pacman("-Q")
@@ -83,38 +90,45 @@ def get_all():
         raise Exception(
             "Failed to get installed list: {0}".format(s["stderr"])
         )
-    for x in s["stdout"].split('\n'):
+    for x in s["stdout"].split("\n"):
         if not x.split():
             continue
-        x = x.split(' ')
+        x = x.split(" ")
         interim[x[0]] = {
-            "id": x[0], "version": x[1], "upgradable": False,
-            "installed": True
+            "id": x[0],
+            "version": x[1],
+            "upgradable": False,
+            "installed": True,
         }
     s = pacman("-Sl")
     if s["code"] != 0:
         raise Exception(
             "Failed to get available list: {0}".format(s["stderr"])
         )
-    for x in s["stdout"].split('\n'):
+    for x in s["stdout"].split("\n"):
         if not x.split():
             continue
-        x = x.split(' ')
+        x = x.split(" ")
         if x[1] in interim:
             interim[x[1]]["repo"] = x[0]
             if interim[x[1]]["version"] != x[2]:
                 interim[x[1]]["upgradable"] = x[2]
         else:
-            results.append({
-                "id": x[1], "repo": x[0], "version": x[2], "upgradable": False,
-                "installed": False
-            })
+            results.append(
+                {
+                    "id": x[1],
+                    "repo": x[0],
+                    "version": x[2],
+                    "upgradable": False,
+                    "installed": False,
+                }
+            )
     for x in interim:
         results.append(interim[x])
     return results
 
 
-def get_installed():
+def get_installed() -> List[Dict[str, str]]:
     """List all installed packages"""
     interim = {}
     s = pacman("-Q")
@@ -122,24 +136,26 @@ def get_installed():
         raise Exception(
             "Failed to get installed list: {0}".format(s["stderr"])
         )
-    for x in s["stdout"].split('\n'):
+    for x in s["stdout"].split("\n"):
         if not x.split():
             continue
-        x = x.split(' ')
+        x = x.split(" ")
         interim[x[0]] = {
-            "id": x[0], "version": x[1], "upgradable": False,
-            "installed": True
+            "id": x[0],
+            "version": x[1],
+            "upgradable": False,
+            "installed": True,
         }
     s = pacman("-Qu")
     if s["code"] != 0 and s["stderr"]:
         raise Exception(
             "Failed to get upgradable list: {0}".format(s["stderr"])
         )
-    for x in s["stdout"].split('\n'):
+    for x in s["stdout"].split("\n"):
         if not x.split():
             continue
-        x = x.split(' -> ')
-        name = x[0].split(' ')[0]
+        x = x.split(" -> ")
+        name = x[0].split(" ")[0]
         if name in interim:
             r = interim[name]
             r["upgradable"] = x[1]
@@ -150,7 +166,7 @@ def get_installed():
     return results
 
 
-def get_available():
+def get_available() -> List[Dict[str, str]]:
     """List all available packages"""
     results = []
     s = pacman("-Sl")
@@ -158,15 +174,15 @@ def get_available():
         raise Exception(
             "Failed to get available list: {0}".format(s["stderr"])
         )
-    for x in s["stdout"].split('\n'):
+    for x in s["stdout"].split("\n"):
         if not x.split():
             continue
-        x = x.split(' ')
+        x = x.split(" ")
         results.append({"id": x[1], "repo": x[0], "version": x[2]})
     return results
 
 
-def get_info(package):
+def get_info(package: str) -> Dict[str, Union[str, Dict[str, str]]]:
     """Get package information from database"""
     interim = []
     s = pacman("-Qi" if is_installed(package) else "-Si", package)
@@ -174,35 +190,40 @@ def get_info(package):
     if s["code"] != 0:
         raise Exception("Failed to get info: {0}".format(s["stderr"]))
 
-    content = s["stdout"].split('\n')
-    for line_num in range(len(content)-1):
-        if 'Optional Deps' not in content[line_num]:
-            if ':' in content[line_num]:
-                content[line_num] = content[line_num].split(':', 1)
+    content = s["stdout"].split("\n")
+    for line_num in range(len(content) - 1):
+        if "Optional Deps" not in content[line_num]:
+            if ":" in content[line_num]:
+                content[line_num] = content[line_num].split(":", 1)
                 interim.append(
-                    (content[line_num][0].strip(), content[line_num][1].strip()))
+                    (
+                        content[line_num][0].strip(),
+                        content[line_num][1].strip(),
+                    )
+                )
 
         else:
             opt_dep = {}
             i = 0
 
-            end_line = [i for i in range(
-                len(content)) if 'Required By' in content[i]][0]
+            end_line = [
+                i for i in range(len(content)) if "Required By" in content[i]
+            ][0]
 
-            try :
-                if ':' in content[line_num]:
-                    content[line_num] = content[line_num].split(':')
-                    opt_dep[content[line_num]
-                            [1].strip()] = content[line_num][2].strip()
+            try:
+                if ":" in content[line_num]:
+                    content[line_num] = content[line_num].split(":")
+                    opt_dep[content[line_num][1].strip()] = content[line_num][
+                        2
+                    ].strip()
             except:
                 pass
 
             line_num += 1
             for i in range(line_num, end_line):
-                if ':' in content[i]:
-                    content[i] = content[i].split(':', 1)
-                    opt_dep[content[i]
-                            [0].strip()] = content[i][1].strip()
+                if ":" in content[i]:
+                    content[i] = content[i].split(":", 1)
+                    opt_dep[content[i][0].strip()] = content[i][1].strip()
             line_num = end_line
             interim.append(("Optional Dependencies", opt_dep))
 
@@ -210,40 +231,49 @@ def get_info(package):
     return result
 
 
-def needs_for(packages):
+def needs_for(packages: Union[List[str], str]) -> List[str]:
     """Get list of not-yet-installed dependencies of these packages"""
     s = pacman("-Sp", packages, ["--print-format", "%n"])
     if s["code"] != 0:
         raise Exception("Failed to get requirements: {0}".format(s["stderr"]))
-    return [x for x in s["stdout"].split('\n') if x]
+    return [x for x in s["stdout"].split("\n") if x]
 
 
-def depends_for(packages):
+def depends_for(packages: Union[List[str], str]) -> List[str]:
     """Get list of installed packages that depend on these"""
     s = pacman("-Rpc", packages, ["--print-format", "%n"])
     if s["code"] != 0:
         raise Exception("Failed to get depends: {0}".format(s["stderr"]))
-    return [x for x in s["stdout"].split('\n') if x]
+    return [x for x in s["stdout"].split("\n") if x]
 
 
-def is_installed(package):
+def is_installed(package: str) -> bool:
     """Return True if the specified package is installed"""
     return pacman("-Q", package)["code"] == 0
 
 
-def is_aur(package):
-    '''
+def is_aur(package: str) -> bool:
+    """
     Return True if the given package is an AUR package.
-    '''
+    """
     try:
         # search in official pacman repo
-        matched_packages = pacman('-Ssq', package, pacman_bin="pacman").get('stdout').split('\n')
+        matched_packages = (
+            pacman("-Ssq", package, pacman_bin="pacman")
+            .get("stdout")
+            .split("\n")
+        )
         for i in matched_packages:
             if i == package:
                 # find a match in official repo. not aur.
                 return False
 
-        req = request.Request("https://aur.archlinux.org/packages/?O=0&SeB=N&K={}&outdated=&SB=n&SO=a&PP=50&do_Search=Go".format(package), data=b'')
+        req = request.Request(
+            "https://aur.archlinux.org/packages/?O=0&SeB=N&K={}&outdated=&SB=n&SO=a&PP=50&do_Search=Go".format(
+                package
+            ),
+            data=b"",
+        )
         res = request.urlopen(req)
         data = res.read()
         if b"No packages matched your search criteria." in data:
@@ -254,7 +284,12 @@ def is_aur(package):
         return False
 
 
-def pacman(flags, pkgs=[], eflgs=[], pacman_bin=__PACMAN_BIN):
+def pacman(
+    flags: str,
+    pkgs: Union[List[str], str] = [],
+    eflgs: List[str] = [],
+    pacman_bin: Optional[str] = __PACMAN_BIN,
+) -> Dict[str, Union[str, int]]:
     """Subprocess wrapper, get all data"""
     if not pkgs:
         cmd = [pacman_bin, "--noconfirm", flags]
@@ -268,6 +303,9 @@ def pacman(flags, pkgs=[], eflgs=[], pacman_bin=__PACMAN_BIN):
         cmd += eflgs
     p = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     data = p.communicate()
-    data = {"code": p.returncode, "stdout": data[0].decode(),
-            "stderr": data[1].rstrip(b'\n').decode()}
+    data = {
+        "code": p.returncode,
+        "stdout": data[0].decode(),
+        "stderr": data[1].rstrip(b"\n").decode(),
+    }
     return data
